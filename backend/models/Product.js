@@ -1,0 +1,7 @@
+module.exports = [
+  {
+    id: 1,
+    name: "Sample Product",
+    price: 0,
+  },
+];
