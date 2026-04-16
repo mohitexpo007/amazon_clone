@@ -22,24 +22,21 @@ This project demonstrates **real-world backend architecture**, **dynamic product
 
 ---
 
+## 🎥 Demo
+
+📹 *Project Walkthrough*  
+
+
+https://github.com/user-attachments/assets/51e1987c-196b-421b-bad2-2bb6596831de
+
+
+
+---
+
 ## 🧠 Tech Stack
 
-### 💻 Frontend
-- React.js (Vite)
-- Axios
-- CSS (Responsive Design)
-
-### ⚙️ Backend
-- Node.js
-- Express.js
-
-### 🗄️ Database
-- PostgreSQL (Supabase)
-
-### ☁️ Deployment
-- Frontend → Vercel  
-- Backend → Render  
-- Database → Supabase  
+**Frontend:** React (Vite), Axios, Responsive CSS  
+**Backend & DB:** Node.js, Express.js, PostgreSQL (Supabase) | **Deploy:** Vercel + Render  
 
 ---
 
@@ -68,6 +65,8 @@ AND category = 'category'
 ## 📄 Product Detail Flow
 - User clicks a product
 - Route → `/product/:id`
+
+
 - Backend fetches product by ID
 - UI renders:
   - Images
@@ -94,3 +93,9 @@ class Cart {
   getTotal() {}
 }
 ```
+## 🛒 Database Schema
+
+<img width="1300" height="1169" alt="image" src="https://github.com/user-attachments/assets/eaf54859-e9fc-4cec-a8bb-c7b4b170355d" />
+
+## Author Mohit
+
