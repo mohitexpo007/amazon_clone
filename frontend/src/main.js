@@ -47,9 +47,15 @@ const state = {
   addingProductId: null,
   error: "",
   heroSlideIndex: 0,
+  previousHeroSlideIndex: null,
+  heroSlideDirection: "next",
   languageMenuOpen: false,
   selectedLanguageCode: "EN",
 };
+
+let isRenderingScheduled = false;
+let heroAutoAdvanceId = null;
+let heroAnimationCleanupId = null;
 
 const escapeHtml = (value = "") =>
   String(value)
@@ -64,6 +70,23 @@ const formatPrice = (value) =>
     minimumFractionDigits: 0,
     maximumFractionDigits: 2,
   })}`;
+
+const scheduleRender = () => {
+  if (isRenderingScheduled) {
+    return;
+  }
+
+  isRenderingScheduled = true;
+  requestAnimationFrame(() => {
+    isRenderingScheduled = false;
+    render();
+  });
+};
+
+const getImageAttributes = (mode = "lazy") =>
+  mode === "eager"
+    ? `loading="eager" decoding="async" fetchpriority="high"`
+    : `loading="lazy" decoding="async"`;
 
 const getCartSummary = () =>
   state.cartItems.reduce(
@@ -105,9 +128,13 @@ const buildCardItems = (items = [], options = {}) =>
 
       return `
         <article class="deal-tile ${options.compact ? "deal-tile-compact" : ""}">
-          <img src="${escapeHtml(image)}" alt="${escapeHtml(item.name)}" />
+          <img
+            src="${escapeHtml(image)}"
+            alt="${escapeHtml(item.name)}"
+            ${getImageAttributes(options.imageMode)}
+          />
           <h3>${escapeHtml(item.name)}</h3>
-          <p>${escapeHtml(item.category || "Popular picks")}</p>
+          ${options.hideDescription ? "" : `<p>${escapeHtml(item.category || "Popular picks")}</p>`}
           ${priceMarkup}
         </article>
       `;
@@ -131,42 +158,42 @@ const buildHomepageCards = () => {
       title: "Pick up where you left off",
       link: "See more",
       items: cartDrivenItems.slice(0, 4),
-      showPrice: true,
+      imageOnly: true,
     },
     {
       title: "Continue shopping deals",
       link: "See more deals",
       items: getProducts(4, 4),
-      showPrice: true,
+      imageOnly: true,
     },
     {
       title: "Buy again",
       link: "More in Buy Again",
       items: getProducts(4, 8),
-      showPrice: true,
+      imageOnly: true,
     },
     {
       title: "Deals related to items you've saved",
       link: "See more deals",
-      items: getProducts(4, 2),
-      showPrice: true,
+      items: getProducts(4, 12),
+      imageOnly: true,
     },
   ];
 };
 
 const buildSecondaryCards = () => {
-  const featuredProduct = getProducts(1, 0)[0] || null;
+  const featuredProduct = getProducts(1, 16)[0] || null;
 
   return [
     {
       title: "Revamp your home in style",
       link: "Explore all",
-      items: getProducts(4, 1),
+      items: getProducts(4, 17),
     },
     {
       title: "Up to 60% off | Footwear & handbags",
       link: "See all offers",
-      items: getProducts(4, 5),
+      items: getProducts(4, 21),
     },
     {
       title: "Up to 75% off | Headphones",
@@ -176,7 +203,36 @@ const buildSecondaryCards = () => {
     {
       title: "Up to 60% off | Furniture & mattresses",
       link: "Explore all",
-      items: getProducts(4, 7),
+      items: getProducts(4, 25),
+    },
+  ];
+};
+
+const buildTertiaryCards = () => {
+  const highlightedProduct = getProducts(1, 29)[0] || null;
+
+  return [
+    {
+      title: "Keep shopping for",
+      link: "See more",
+      items: getProducts(4, 30),
+      showPrice: true,
+    },
+    {
+      title: "Deals on popular reorders",
+      link: "See more deals",
+      items: getProducts(4, 34),
+      showPrice: true,
+    },
+    {
+      title: "Headphones for running",
+      link: "Shop now",
+      single: highlightedProduct,
+    },
+    {
+      title: "Up to 60% off | Bestsellers from women-led brands",
+      link: "See all offers",
+      items: getProducts(4, 38),
     },
   ];
 };
@@ -186,19 +242,13 @@ const buildWideStrip = (title, offset, count = 6) => {
   const tiles = items
     .map(
       (item) => `
-        <article class="strip-item">
+        <a href="/" class="strip-item" aria-label="${escapeHtml(item.name)}">
           <img
             src="${escapeHtml(item.images?.[0] || "https://via.placeholder.com/360x280?text=Product")}"
             alt="${escapeHtml(item.name)}"
+            ${getImageAttributes()}
           />
-          <button
-            class="strip-add-button"
-            data-product-id="${item.id}"
-            ${state.addingProductId === item.id ? "disabled" : ""}
-          >
-            ${state.addingProductId === item.id ? "Adding" : "Add to cart"}
-          </button>
-        </article>
+        </a>
       `
     )
     .join("");
@@ -262,7 +312,10 @@ const render = () => {
   const cartSummary = getCartSummary();
   const homepageCards = buildHomepageCards();
   const secondaryCards = buildSecondaryCards();
+  const tertiaryCards = buildTertiaryCards();
   const currentHeroSlide = heroSlides[state.heroSlideIndex];
+  const previousHeroSlide =
+    state.previousHeroSlideIndex === null ? null : heroSlides[state.previousHeroSlideIndex];
   const heroStatus =
     state.loadingProducts || state.loadingCart
       ? `<div class="loading-pill">Loading fresh deals...</div>`
@@ -278,7 +331,30 @@ const render = () => {
                 <article class="deal-card">
                 <h2>${escapeHtml(card.title)}</h2>
                 <div class="deal-tile-grid">
-                  ${buildCardItems(card.items, { showPrice: card.showPrice })}
+                  ${
+                    card.imageOnly
+                      ? card.items
+                          .map((item) => {
+                            const image =
+                              item.images?.[0] || "https://via.placeholder.com/320x240?text=Product";
+
+                            return `
+                              <a href="/" class="hero-image-tile" aria-label="${escapeHtml(item.name)}">
+                                <img
+                                  src="${escapeHtml(image)}"
+                                  alt="${escapeHtml(item.name)}"
+                                  ${getImageAttributes("eager")}
+                                />
+                              </a>
+                            `;
+                          })
+                          .join("")
+                      : buildCardItems(card.items, {
+                          showPrice: card.showPrice,
+                          imageMode: "eager",
+                          hideDescription: card.hideDescription,
+                        })
+                  }
                 </div>
                 <a class="deal-link" href="/">${escapeHtml(card.link)}</a>
               </article>
@@ -300,10 +376,14 @@ const render = () => {
           card.single.images?.[0] || "https://via.placeholder.com/420x320?text=Product";
 
         return `
-          <article class="deal-card">
+            <article class="deal-card">
             <h2>${escapeHtml(card.title)}</h2>
             <div class="single-feature">
-              <img src="${escapeHtml(image)}" alt="${escapeHtml(card.single.name)}" />
+              <img
+                src="${escapeHtml(image)}"
+                alt="${escapeHtml(card.single.name)}"
+                ${getImageAttributes()}
+              />
               <div class="single-feature-copy">
                 <p>${escapeHtml(card.single.name)}</p>
                 <button
@@ -324,13 +404,66 @@ const render = () => {
         <article class="deal-card">
           <h2>${escapeHtml(card.title)}</h2>
           <div class="deal-tile-grid">
-            ${buildCardItems(card.items || [], { compact: true })}
+            ${buildCardItems(card.items || [], { compact: true, imageMode: "lazy" })}
           </div>
           <a class="deal-link" href="/">${escapeHtml(card.link)}</a>
         </article>
       `;
     })
     .join("");
+
+  const tertiaryCardMarkup = !hasProducts
+    ? `
+        <article class="deal-card status-shell">Loading more picks...</article>
+        <article class="deal-card status-shell">Loading reorder deals...</article>
+        <article class="deal-card status-shell">Loading headphones collection...</article>
+        <article class="deal-card status-shell">Loading bestseller offers...</article>
+      `
+    : tertiaryCards
+        .map((card) => {
+          if (card.single) {
+            const image =
+              card.single.images?.[0] || "https://via.placeholder.com/420x320?text=Product";
+
+            return `
+                <article class="deal-card">
+                <h2>${escapeHtml(card.title)}</h2>
+                <div class="single-feature">
+                  <img
+                    src="${escapeHtml(image)}"
+                    alt="${escapeHtml(card.single.name)}"
+                    ${getImageAttributes()}
+                  />
+                  <div class="single-feature-copy">
+                    <p>${escapeHtml(card.single.name)}</p>
+                    <button
+                      class="primary-add-button"
+                      data-product-id="${card.single.id}"
+                      ${state.addingProductId === card.single.id ? "disabled" : ""}
+                    >
+                      ${state.addingProductId === card.single.id ? "Adding..." : "Add to cart"}
+                    </button>
+                  </div>
+                </div>
+                <a class="deal-link" href="/">${escapeHtml(card.link)}</a>
+              </article>
+            `;
+          }
+
+          return `
+            <article class="deal-card">
+              <h2>${escapeHtml(card.title)}</h2>
+              <div class="deal-tile-grid">
+                ${buildCardItems(card.items || [], {
+                  showPrice: card.showPrice,
+                  imageMode: "lazy",
+                })}
+              </div>
+              <a class="deal-link" href="/">${escapeHtml(card.link)}</a>
+            </article>
+          `;
+        })
+        .join("");
 
   app.innerHTML = `
     <div class="site-shell">
@@ -426,6 +559,24 @@ const render = () => {
 
       <main class="homepage-shell">
         <section class="hero-banner">
+          <div class="hero-banner-stage">
+            ${
+              previousHeroSlide
+                ? `
+                  <div
+                    class="hero-banner-slide hero-banner-slide-out hero-banner-slide-out-${state.heroSlideDirection}"
+                    aria-hidden="true"
+                    style="background-image: linear-gradient(180deg, rgba(0, 0, 0, 0.08), rgba(0, 0, 0, 0.18)), url('${escapeHtml(previousHeroSlide)}');"
+                  ></div>
+                `
+                : ""
+            }
+            <div
+              class="hero-banner-slide ${previousHeroSlide ? `hero-banner-slide-in hero-banner-slide-in-${state.heroSlideDirection}` : ""}"
+              aria-hidden="false"
+              style="background-image: linear-gradient(180deg, rgba(0, 0, 0, 0.08), rgba(0, 0, 0, 0.18)), url('${escapeHtml(currentHeroSlide)}');"
+            ></div>
+          </div>
           <button
             class="hero-arrow hero-arrow-left"
             type="button"
@@ -434,10 +585,7 @@ const render = () => {
           >
             &#10094;
           </button>
-          <div
-            class="hero-copy"
-            style="background-image: linear-gradient(180deg, rgba(0, 0, 0, 0.08), rgba(0, 0, 0, 0.26)), url('${escapeHtml(currentHeroSlide)}');"
-          >
+          <div class="hero-copy">
             <div class="hero-copy-overlay">
               <div class="hero-indicators">
                 ${heroSlides
@@ -480,8 +628,15 @@ const render = () => {
           ${secondaryCardMarkup}
         </section>
 
-        ${buildWideStrip("Up to 40% off | Headphones and earbuds", 0, 6)}
-        ${buildWideStrip("More top picks for you", 6, 6)}
+        ${buildWideStrip("Up to 40% off | Headphones and earbuds", 14, 6)}
+        ${buildWideStrip("More top picks for you", 20, 6)}
+
+        <section class="deal-grid secondary-grid">
+          ${tertiaryCardMarkup}
+        </section>
+
+        ${buildWideStrip("Based on your cart", 26, 6)}
+        ${buildWideStrip("Trending audio accessories", 32, 6)}
 
         <section class="cart-summary-strip">
           <div>
@@ -496,9 +651,7 @@ const render = () => {
 };
 
 const fetchProducts = async () => {
-  state.loadingProducts = true;
   state.error = "";
-  render();
 
   try {
     const response = await api.get("/api/products");
@@ -508,14 +661,10 @@ const fetchProducts = async () => {
     state.error = "Unable to load products right now.";
   } finally {
     state.loadingProducts = false;
-    render();
   }
 };
 
 const fetchCart = async () => {
-  state.loadingCart = true;
-  render();
-
   try {
     const response = await api.get("/api/cart");
     state.cartItems = response.data;
@@ -524,41 +673,73 @@ const fetchCart = async () => {
     state.error = "Unable to load cart data right now.";
   } finally {
     state.loadingCart = false;
-    render();
   }
 };
 
 const addToCart = async (productId) => {
   state.addingProductId = productId;
   state.error = "";
-  render();
+  scheduleRender();
 
   try {
     await api.post("/api/cart", {
       product_id: productId,
       quantity: 1,
     });
-    await fetchCart();
+    const response = await api.get("/api/cart");
+    state.cartItems = response.data;
   } catch (error) {
     console.error("Error adding item to cart:", error);
     state.error =
       error.response?.data?.message || "Unable to add this item to the cart.";
   } finally {
     state.addingProductId = null;
-    render();
+    scheduleRender();
   }
+};
+
+const setHeroSlide = (nextIndex, direction = "next") => {
+  if (nextIndex === state.heroSlideIndex) {
+    return;
+  }
+
+  if (heroAnimationCleanupId) {
+    clearTimeout(heroAnimationCleanupId);
+  }
+
+  state.previousHeroSlideIndex = state.heroSlideIndex;
+  state.heroSlideIndex = nextIndex;
+  state.heroSlideDirection = direction;
+  scheduleRender();
+
+  heroAnimationCleanupId = window.setTimeout(() => {
+    state.previousHeroSlideIndex = null;
+    scheduleRender();
+  }, 720);
 };
 
 const changeHeroSlide = (direction) => {
   const lastIndex = heroSlides.length - 1;
+  const nextIndex =
+    direction === "prev"
+      ? state.heroSlideIndex === 0
+        ? lastIndex
+        : state.heroSlideIndex - 1
+      : state.heroSlideIndex === lastIndex
+        ? 0
+        : state.heroSlideIndex + 1;
 
-  if (direction === "prev") {
-    state.heroSlideIndex = state.heroSlideIndex === 0 ? lastIndex : state.heroSlideIndex - 1;
-  } else {
-    state.heroSlideIndex = state.heroSlideIndex === lastIndex ? 0 : state.heroSlideIndex + 1;
+  setHeroSlide(nextIndex, direction);
+};
+
+const startHeroAutoplay = () => {
+  if (heroAutoAdvanceId) {
+    clearInterval(heroAutoAdvanceId);
   }
 
-  render();
+  heroAutoAdvanceId = window.setInterval(() => {
+    changeHeroSlide("next");
+  }, 3000);
 };
 
 app.addEventListener("click", (event) => {
@@ -576,14 +757,14 @@ app.addEventListener("click", (event) => {
 
   if (languageTrigger) {
     state.languageMenuOpen = !state.languageMenuOpen;
-    render();
+    scheduleRender();
     return;
   }
 
   if (languageOption) {
     state.selectedLanguageCode = languageOption.dataset.languageCode;
     state.languageMenuOpen = false;
-    render();
+    scheduleRender();
     return;
   }
 
@@ -593,12 +774,16 @@ app.addEventListener("click", (event) => {
   }
 
   if (heroDot) {
-    state.heroSlideIndex = Number(heroDot.dataset.heroIndex);
-    render();
+    const nextIndex = Number(heroDot.dataset.heroIndex);
+    const direction = nextIndex < state.heroSlideIndex ? "prev" : "next";
+    setHeroSlide(nextIndex, direction);
     return;
   }
 
+  let shouldRender = false;
+
   if (!languageMenu) {
+    shouldRender = state.languageMenuOpen;
     state.languageMenuOpen = false;
   }
 
@@ -606,7 +791,9 @@ app.addEventListener("click", (event) => {
     event.preventDefault();
   }
 
-  render();
+  if (shouldRender) {
+    scheduleRender();
+  }
 });
 
 app.addEventListener("submit", (event) => {
@@ -616,8 +803,12 @@ app.addEventListener("submit", (event) => {
 });
 
 const bootstrap = async () => {
+  state.loadingProducts = true;
+  state.loadingCart = true;
   render();
+  startHeroAutoplay();
   await Promise.allSettled([fetchProducts(), fetchCart()]);
+  render();
 };
 
 bootstrap();

@@ -1,0 +1,9 @@
+<svg width="228" height="87" viewBox="0 0 228 87" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="228" height="87" fill="#131921"/>
+  <path d="M32.5 56.5C49.2 67.4 76.5 74.2 99.9 74.2C116.4 74.2 134.5 71.4 149.1 65.6C151.5 64.6 153.5 67.2 150.8 68.9C137.1 78.7 114.8 84.8 95.5 84.8C68.7 84.8 44.5 75.1 29.8 59C28.6 57.8 31.1 55.7 32.5 56.5Z" fill="white"/>
+  <path d="M144.9 54.2C147 52.1 150.8 52.9 151.7 54.2C152.7 55.8 151.4 61 149.4 64.1C148.8 65.1 149.8 66 150.8 65.5C157.3 62.2 159 55.1 157.7 53.5C156.3 51.8 149 50.2 143.2 52.1C142.1 52.5 142.4 53.7 143.6 53.8C144.1 53.8 144.5 54 144.9 54.2Z" fill="white"/>
+  <text x="33" y="46" fill="white" font-family="Arial, Helvetica, sans-serif" font-size="28" font-weight="700" letter-spacing="-1.2">amazon</text>
+  <text x="170" y="46" fill="white" font-family="Arial, Helvetica, sans-serif" font-size="15" font-weight="700">.in</text>
+  <text x="100" y="69" fill="#2F9CF4" font-family="Arial, Helvetica, sans-serif" font-size="24" font-weight="700">prime</text>
+  <path d="M40 52C57 64 85 68 108 66.5C119.5 65.8 131 63.6 140.5 59.3" stroke="white" stroke-width="4.5" stroke-linecap="round"/>
+</svg>

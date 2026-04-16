@@ -5,7 +5,10 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "seed": "node scripts/seedProducts.js"
+    "seed": "node scripts/importProductsCsv.js",
+    "seed:sample": "node scripts/seedProducts.js",
+    "seed:electronics": "node scripts/appendElectronicsCsv.js",
+    "seed:enrich": "node scripts/enrichProductMetadata.js"
   },
   "keywords": [],
   "author": "",

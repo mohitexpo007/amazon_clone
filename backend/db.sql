@@ -5,7 +5,9 @@ CREATE TABLE IF NOT EXISTS products (
   price NUMERIC(10, 2) NOT NULL CHECK (price >= 0),
   images TEXT[] DEFAULT ARRAY[]::TEXT[],
   category VARCHAR(100) NOT NULL,
-  stock INTEGER NOT NULL DEFAULT 0 CHECK (stock >= 0)
+  stock INTEGER NOT NULL DEFAULT 0 CHECK (stock >= 0),
+  rating NUMERIC(3, 2) DEFAULT 0 CHECK (rating >= 0),
+  rating_count INTEGER DEFAULT 0 CHECK (rating_count >= 0)
 );
 
 CREATE TABLE IF NOT EXISTS cart_items (
