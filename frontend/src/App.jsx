@@ -1,11 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import axios from "axios";
 import { CartItemModel, CartSummaryModel } from "./models/CartModels.js";
+import api from "./api.js";
 import "./style.css";
-
-const api = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL || "http://localhost:5000",
-});
 
 const navigationItems = [
   "All",
