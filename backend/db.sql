@@ -30,3 +30,12 @@ CREATE TABLE IF NOT EXISTS order_items (
   quantity INTEGER NOT NULL CHECK (quantity > 0),
   price NUMERIC(10, 2) NOT NULL CHECK (price >= 0)
 );
+
+CREATE TABLE IF NOT EXISTS users (
+  id SERIAL PRIMARY KEY,
+  name VARCHAR(120) NOT NULL,
+  email VARCHAR(255) NOT NULL UNIQUE,
+  address TEXT,
+  password_hash TEXT NOT NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);

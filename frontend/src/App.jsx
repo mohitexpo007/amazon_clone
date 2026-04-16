@@ -74,6 +74,15 @@ const cleanTextForUi = (value = "") =>
     .replace(/\s+/g, " ")
     .trim();
 
+const truncateToWordCount = (value = "", wordCount = 3) => {
+  const words = cleanTextForUi(value).split(" ").filter(Boolean);
+  if (words.length <= wordCount) {
+    return words.join(" ");
+  }
+
+  return `${words.slice(0, wordCount).join(" ")}...`;
+};
+
 const buildDescriptionPoints = (description = "") => {
   const normalized = cleanTextForUi(description);
 
@@ -108,6 +117,8 @@ const defaultCheckoutAddress = {
   phone: "9876543210",
 };
 
+const AUTH_STORAGE_KEY = "amazonclone-current-user";
+
 const formatAddressForApi = (address) =>
   [
     address.fullName,
@@ -132,6 +143,16 @@ const formatAddressForDisplay = (address) =>
     .filter(Boolean)
     .join(", ");
 
+const getHeaderAddressPreview = (address = "") => {
+  const compact = cleanTextForUi(address);
+  if (!compact) {
+    return "Add address";
+  }
+
+  const words = compact.split(",")[0].split(" ").filter(Boolean);
+  return words.slice(0, 2).join(" ");
+};
+
 function App() {
   const [allProducts, setAllProducts] = useState([]);
   const [products, setProducts] = useState([]);
@@ -153,8 +174,19 @@ function App() {
   const [previousHeroSlideIndex, setPreviousHeroSlideIndex] = useState(null);
   const [heroSlideDirection, setHeroSlideDirection] = useState("next");
   const [languageMenuOpen, setLanguageMenuOpen] = useState(false);
+  const [accountMenuOpen, setAccountMenuOpen] = useState(false);
   const [selectedLanguageCode, setSelectedLanguageCode] = useState("EN");
   const [currentView, setCurrentView] = useState("home");
+  const [currentUser, setCurrentUser] = useState(() => {
+    try {
+      const storedUser = window.localStorage.getItem(AUTH_STORAGE_KEY);
+      return storedUser ? JSON.parse(storedUser) : null;
+    } catch {
+      return null;
+    }
+  });
+  const [authMode, setAuthMode] = useState("signup");
+  const [authSubmitting, setAuthSubmitting] = useState(false);
   const [selectedProductId, setSelectedProductId] = useState(null);
   const [productDetail, setProductDetail] = useState(null);
   const [loadingProductDetail, setLoadingProductDetail] = useState(false);
@@ -171,6 +203,12 @@ function App() {
   const isHeaderSearchFocusedRef = useRef(false);
   const headerSearchDraftRef = useRef("");
   const checkoutAddressDraftRef = useRef(defaultCheckoutAddress);
+  const authDraftRef = useRef({
+    name: "",
+    email: "",
+    address: "",
+    password: "",
+  });
 
   useEffect(() => {
     heroSlideIndexRef.current = heroSlideIndex;
@@ -180,17 +218,64 @@ function App() {
     headerSearchDraftRef.current = searchTerm;
   }, [searchTerm]);
 
+  useEffect(() => {
+    try {
+      if (currentUser) {
+        window.localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(currentUser));
+      } else {
+        window.localStorage.removeItem(AUTH_STORAGE_KEY);
+      }
+    } catch {
+      // Ignore storage failures and keep the in-memory session.
+    }
+  }, [currentUser]);
+
   const getCartSummary = () =>
     new CartSummaryModel(cartItems.map((item) => new CartItemModel(item)));
 
-  const getProducts = (count, offset = 0) => {
+  const featuredHomepageProducts = useMemo(() => {
     if (allProducts.length === 0) {
       return [];
     }
 
+    const fashionProducts = allProducts.filter((product) =>
+      /fashion|shirt|shoe|watch|bag|women|men|clothing|wear/i.test(product.category || product.name)
+    );
+    const electronicsProducts = allProducts.filter((product) =>
+      /electronics|headphone|earbud|speaker|laptop|mobile|charger|camera|smart|tech/i.test(
+        product.category || product.name
+      )
+    );
+    const remainingProducts = allProducts.filter(
+      (product) =>
+        !fashionProducts.some((item) => item.id === product.id) &&
+        !electronicsProducts.some((item) => item.id === product.id)
+    );
+
+    const mixedProducts = [];
+    const maxMixedLength = Math.max(fashionProducts.length, electronicsProducts.length);
+
+    for (let index = 0; index < maxMixedLength; index += 1) {
+      if (fashionProducts[index]) {
+        mixedProducts.push(fashionProducts[index]);
+      }
+
+      if (electronicsProducts[index]) {
+        mixedProducts.push(electronicsProducts[index]);
+      }
+    }
+
+    return [...mixedProducts, ...remainingProducts];
+  }, [allProducts]);
+
+  const getProducts = (count, offset = 0) => {
+    if (featuredHomepageProducts.length === 0) {
+      return [];
+    }
+
     return Array.from({ length: count }, (_, index) => {
-      const productIndex = (offset + index) % allProducts.length;
-      return allProducts[productIndex];
+      const productIndex = (offset + index) % featuredHomepageProducts.length;
+      return featuredHomepageProducts[productIndex];
     });
   };
 
@@ -309,6 +394,27 @@ function App() {
     const syncViewFromUrl = () => {
       const { pathname, search } = window.location;
 
+      if (pathname === "/signin") {
+        setAuthMode("signin");
+        setCurrentView("signin");
+        return;
+      }
+
+      if (pathname === "/signup") {
+        setAuthMode("signup");
+        setCurrentView("signup");
+        return;
+      }
+
+      if (!currentUser) {
+        setAuthMode("signup");
+        setCurrentView("signup");
+        if (pathname !== "/signup") {
+          navigateTo("/signup");
+        }
+        return;
+      }
+
       if (pathname === "/checkout") {
         setCurrentView("checkout");
         return;
@@ -378,7 +484,7 @@ function App() {
     return () => {
       window.removeEventListener("popstate", syncViewFromUrl);
     };
-  }, []);
+  }, [currentUser]);
 
   useEffect(() => {
     if (currentView !== "home") {
@@ -458,6 +564,67 @@ function App() {
   const refreshCartItems = async () => {
     const response = await api.get("/api/cart");
     setCartItems(response.data);
+  };
+
+  const openAuthPage = (mode = "signin") => {
+    const nextPath = mode === "signup" ? "/signup" : "/signin";
+    setError("");
+    navigateTo(nextPath);
+    setAuthMode(mode);
+    setCurrentView(mode);
+  };
+
+  const signOut = () => {
+    setCurrentUser(null);
+    setAuthMode("signin");
+    setLanguageMenuOpen(false);
+    setAccountMenuOpen(false);
+    navigateTo("/signin");
+    setCurrentView("signin");
+  };
+
+  const submitAuthForm = async (mode, formElement) => {
+    const formData = new FormData(formElement);
+    const name = cleanTextForUi(formData.get("name"));
+    const email = cleanTextForUi(formData.get("email"));
+    const address = cleanTextForUi(formData.get("address"));
+    const password = String(formData.get("password") || "");
+
+    authDraftRef.current = { name, email, address, password };
+
+    if (!email || !password || (mode === "signup" && (!name || !address))) {
+      setError("Please fill in all required fields.");
+      return;
+    }
+
+    setAuthSubmitting(true);
+    setError("");
+
+    try {
+      const response = await api.post(`/api/auth/${mode}`, {
+        name,
+        email,
+        address,
+        password,
+      });
+
+      setCurrentUser(response.data.user);
+      authDraftRef.current = { name: "", email: "", address: "", password: "" };
+      if (response.data.user?.address) {
+        setSavedCheckoutAddress((currentValue) => ({
+          ...currentValue,
+          fullName: response.data.user.name || currentValue.fullName,
+          addressLine1: response.data.user.address,
+        }));
+      }
+      navigateTo("/");
+      setCurrentView("home");
+    } catch (requestError) {
+      console.error(`Error during ${mode}:`, requestError);
+      setError(requestError.response?.data?.message || "Unable to continue right now.");
+    } finally {
+      setAuthSubmitting(false);
+    }
   };
 
   const updateCartItemQuantity = async (cartItemId, quantity) => {
@@ -563,6 +730,12 @@ function App() {
     setCurrentView("checkout");
   };
 
+  const openAddressEditor = () => {
+    checkoutAddressDraftRef.current = savedCheckoutAddress;
+    openCheckoutPage();
+    setIsEditingCheckoutAddress(true);
+  };
+
   const openOrderConfirmationPage = async (orderId) => {
     navigateTo(`/order/${orderId}`);
     setCurrentView("confirmation");
@@ -588,6 +761,15 @@ function App() {
 
     checkoutAddressDraftRef.current = nextAddress;
     setSavedCheckoutAddress(nextAddress);
+    setCurrentUser((currentValue) =>
+      currentValue
+        ? {
+            ...currentValue,
+            name: nextAddress.fullName || currentValue.name,
+            address: formatAddressForDisplay(nextAddress),
+          }
+        : currentValue
+    );
     setIsEditingCheckoutAddress(false);
   };
 
@@ -823,6 +1005,76 @@ function App() {
     </div>
   `;
 
+  const buildAccountMenu = () => `
+    <div class="account-menu">
+      <div class="account-menu-pointer"></div>
+      <div class="account-menu-card">
+        <div class="account-menu-grid">
+          <aside class="account-menu-buy-again">
+            <h3>Buy it again</h3>
+            <a href="/" class="account-menu-manage-link">View All & Manage</a>
+            ${getProducts(4, 12)
+              .map((item) => {
+                const image = item.images?.[0] || "https://via.placeholder.com/120x120?text=Product";
+
+                return `
+                  <article class="account-repeat-item">
+                    <img src="${escapeHtml(image)}" alt="${escapeHtml(item.name)}" ${getImageAttributes()} />
+                    <div>
+                      <a href="/product/${item.id}" data-product-link="${item.id}" class="account-repeat-title">
+                        ${escapeHtml(truncateToWordCount(item.name, 3))}
+                      </a>
+                      <p class="account-repeat-price">${formatPrice(item.price)}</p>
+                      <p class="account-repeat-prime">prime</p>
+                      <button type="button" class="account-repeat-button" data-product-id="${item.id}">
+                        ${addingProductId === item.id ? "Adding" : "Add to cart"}
+                      </button>
+                    </div>
+                  </article>
+                `;
+              })
+              .join("")}
+          </aside>
+
+          <section class="account-menu-main">
+            <div class="account-menu-banner">
+              <span>Who is shopping? Select a profile.</span>
+              <button type="button" class="account-menu-manage-button">Manage Profiles</button>
+            </div>
+
+            <div class="account-menu-columns">
+              <div class="account-menu-column">
+                <h3>Your Lists</h3>
+                <a href="/">Shopping List</a>
+                <a href="/">Create a Wish List</a>
+                <a href="/">Wish from Any Website</a>
+                <a href="/">Baby Wishlist</a>
+                <a href="/">Discover Your Style</a>
+                <a href="/">Explore Showroom</a>
+              </div>
+
+              <div class="account-menu-column account-menu-column-account">
+                <h3>Your Account</h3>
+                <a href="/">Switch Accounts</a>
+                <a href="/">Your Account</a>
+                <a href="/">Your Orders</a>
+                <a href="/">Your Wish List</a>
+                <a href="/">Keep shopping for</a>
+                <a href="/">Your Recommendations</a>
+                <a href="/">Returns</a>
+                <a href="/">Your Prime Membership</a>
+                <a href="/">Devices</a>
+                <button type="button" class="account-menu-signout" data-open-auth="signout">
+                  Sign Out
+                </button>
+              </div>
+            </div>
+          </section>
+        </div>
+      </div>
+    </div>
+  `;
+
   const sharedHeaderMarkup = `
     <header class="header-shell">
       <div class="header-top">
@@ -838,10 +1090,12 @@ function App() {
           </a>
         </div>
 
-        <div class="delivery-block">
-          <span>Deliver to Mohit</span>
-          <strong>Butibori ... 441122</strong>
-        </div>
+        <button type="button" class="delivery-block delivery-edit-trigger" data-edit-address-header="true">
+          <span>Deliver to ${escapeHtml(currentUser?.name || savedCheckoutAddress.fullName)}</span>
+          <strong>${escapeHtml(
+            getHeaderAddressPreview(currentUser?.address || formatAddressForDisplay(savedCheckoutAddress))
+          )}</strong>
+        </button>
 
         <form class="search-shell">
           <select class="search-category" data-header-category="true" aria-label="Select category">
@@ -883,13 +1137,18 @@ function App() {
             <strong>India</strong>
             ${buildLanguageMenu()}
           </div>
-          <div class="header-link">
-            <span>Hello, Mohit</span>
-            <strong>Account & Lists <span class="header-caret">▼</span></strong>
+          <div class="header-link account-link ${accountMenuOpen ? "account-link-open" : ""}">
+            <span>Hello, ${escapeHtml(currentUser?.name || "guest")}</span>
+            <strong>
+              <button type="button" class="account-trigger" data-account-trigger="true">
+                Account & Lists <span class="header-caret">▼</span>
+              </button>
+            </strong>
+            ${buildAccountMenu()}
           </div>
           <div class="header-link">
-            <span>Returns</span>
-            <strong>& Orders</strong>
+            <span>${currentUser ? "Signed in as" : "Already a member?"}</span>
+            <strong data-open-auth="${currentUser ? "signout" : "signin"}">${escapeHtml(currentUser ? currentUser.email : "Login")}</strong>
           </div>
           <button type="button" class="cart-badge" data-go-cart="true">
             <span class="cart-count">${cartSummary.itemCount}</span>
@@ -938,6 +1197,100 @@ function App() {
         <strong>Cart</strong>
       </button>
     </header>
+  `;
+
+  const authPageMarkup = `
+    <main class="auth-shell">
+      <section class="auth-form-panel">
+        <div class="auth-form-wrap">
+          <img
+            src="/amazon-in-prime-logo.svg"
+            alt="Amazon"
+            class="auth-brand"
+            loading="eager"
+            decoding="async"
+          />
+
+          <form class="auth-form-card" data-auth-form="${escapeHtml(authMode)}">
+            <h1>${authMode === "signup" ? "Create account" : "Sign in"}</h1>
+            <p class="auth-form-subtitle">
+              ${authMode === "signup" ? "Unpack happiness with your own Amazon account." : "Welcome back. Sign in to continue shopping."}
+            </p>
+
+            ${error ? `<p class="auth-error-banner">${escapeHtml(error)}</p>` : ""}
+
+            ${
+              authMode === "signup"
+                ? `
+                  <input
+                    type="text"
+                    name="name"
+                    placeholder="Enter Your Name"
+                    value="${escapeHtml(authDraftRef.current.name)}"
+                    autocomplete="name"
+                  />
+                  <input
+                    type="text"
+                    name="address"
+                    placeholder="Enter Your Address"
+                    value="${escapeHtml(authDraftRef.current.address)}"
+                    autocomplete="street-address"
+                  />
+                `
+                : ""
+            }
+
+            <input
+              type="email"
+              name="email"
+              placeholder="E-mail ID"
+              value="${escapeHtml(authDraftRef.current.email)}"
+              autocomplete="email"
+            />
+
+            <input
+              type="password"
+              name="password"
+              placeholder="${authMode === "signup" ? "Create Password" : "Enter Password"}"
+              value="${escapeHtml(authDraftRef.current.password)}"
+              autocomplete="${authMode === "signup" ? "new-password" : "current-password"}"
+            />
+
+            <p class="auth-terms">
+              by signing in you agree to our <span>Terms and Conditions</span>
+            </p>
+
+            <button type="submit" class="auth-submit-button" ${authSubmitting ? "disabled" : ""}>
+              ${authSubmitting ? "Please wait..." : authMode === "signup" ? "Sign up" : "Sign in"}
+            </button>
+
+            <p class="auth-switch-line">
+              ${authMode === "signup" ? "already a member?" : "don't have an account?"}
+              <button type="button" class="auth-switch-button" data-open-auth="${
+                authMode === "signup" ? "signin" : "signup"
+              }">
+                ${authMode === "signup" ? "login" : "sign up"}
+              </button>
+            </p>
+          </form>
+        </div>
+      </section>
+
+      <aside class="auth-visual-panel">
+        <div class="auth-visual-inner">
+          <p class="auth-visual-kicker">◈ Unpack!</p>
+          <h2>Happiness</h2>
+          <div class="auth-bag-graphic" aria-hidden="true">
+            <div class="auth-bag-handle"></div>
+            <div class="auth-bag-body">
+              <span></span>
+              <span></span>
+            </div>
+            <div class="auth-bag-smile"></div>
+          </div>
+        </div>
+      </aside>
+    </main>
   `;
 
   const homepageMarkup = useMemo(() => {
@@ -1215,6 +1568,8 @@ function App() {
     error,
     heroSlideDirection,
     heroSlideIndex,
+    accountMenuOpen,
+    currentUser,
     languageMenuOpen,
     loadingCart,
     loadingHomeProducts,
@@ -1412,6 +1767,8 @@ function App() {
     searchTerm,
     selectedCategory,
     selectedLanguageCode,
+    accountMenuOpen,
+    currentUser,
     languageMenuOpen,
     cartSummary.itemCount,
     activePriceFilterLabel,
@@ -1569,6 +1926,8 @@ function App() {
     searchTerm,
     selectedCategory,
     selectedLanguageCode,
+    accountMenuOpen,
+    currentUser,
     languageMenuOpen,
     selectedProductImageIndex,
     cartSummary.itemCount,
@@ -1736,6 +2095,8 @@ function App() {
     cartSummary.itemCount,
     cartSummary.subtotal,
     cartSummary.total,
+    accountMenuOpen,
+    currentUser,
     languageMenuOpen,
     selectedCategory,
     selectedLanguageCode,
@@ -1965,8 +2326,10 @@ function App() {
     const addButton = event.target.closest("[data-product-id]");
     const cartNav = event.target.closest("[data-go-cart]");
     const homeNav = event.target.closest("[data-go-home]");
+    const authAction = event.target.closest("[data-open-auth]");
     const buyNowButton = event.target.closest("[data-buy-now]");
     const openCheckoutButton = event.target.closest("[data-open-checkout]");
+    const editAddressHeaderButton = event.target.closest("[data-edit-address-header]");
     const placeOrderButton = event.target.closest("[data-place-order]");
     const editAddressButton = event.target.closest("[data-edit-address]");
     const resultsCategoryButton = event.target.closest("[data-results-category]");
@@ -1982,10 +2345,22 @@ function App() {
     const resultsLink = event.target.closest("[data-go-results]");
     const languageTrigger = event.target.closest("[data-language-trigger]");
     const languageOption = event.target.closest("[data-language-code]");
+    const accountTrigger = event.target.closest("[data-account-trigger]");
     const languageMenu = event.target.closest(".language-menu");
+    const accountMenu = event.target.closest(".account-menu");
 
     if (event.target.closest(".strip-arrow")) {
       event.preventDefault();
+      return;
+    }
+
+    if (authAction) {
+      event.preventDefault();
+      if (authAction.dataset.openAuth === "signout") {
+        signOut();
+      } else {
+        openAuthPage(authAction.dataset.openAuth);
+      }
       return;
     }
 
@@ -2005,6 +2380,12 @@ function App() {
     if (buyNowButton) {
       event.preventDefault();
       handleBuyNow(Number(buyNowButton.dataset.buyNow));
+      return;
+    }
+
+    if (editAddressHeaderButton) {
+      event.preventDefault();
+      openAddressEditor();
       return;
     }
 
@@ -2125,6 +2506,7 @@ function App() {
 
     if (languageTrigger) {
       event.preventDefault();
+      setAccountMenuOpen(false);
       setLanguageMenuOpen((currentValue) => !currentValue);
       return;
     }
@@ -2133,6 +2515,13 @@ function App() {
       event.preventDefault();
       setSelectedLanguageCode(languageOption.dataset.languageCode);
       setLanguageMenuOpen(false);
+      return;
+    }
+
+    if (accountTrigger) {
+      event.preventDefault();
+      setLanguageMenuOpen(false);
+      setAccountMenuOpen((currentValue) => !currentValue);
       return;
     }
 
@@ -2153,9 +2542,19 @@ function App() {
     if (!languageMenu && languageMenuOpen) {
       setLanguageMenuOpen(false);
     }
+
+    if (!accountMenu && !accountTrigger && accountMenuOpen) {
+      setAccountMenuOpen(false);
+    }
   };
 
   const handleHomepageSubmit = (event) => {
+    if (event.target.matches("[data-auth-form='signin'], [data-auth-form='signup']")) {
+      event.preventDefault();
+      submitAuthForm(event.target.dataset.authForm, event.target);
+      return;
+    }
+
     if (event.target.closest(".search-shell")) {
       event.preventDefault();
       const submittedSearchTerm = headerSearchDraftRef.current.trim();
@@ -2172,6 +2571,18 @@ function App() {
   };
 
   const handleHomepageInput = (event) => {
+    if (event.target.matches("[name='name'], [name='email'], [name='password']")) {
+      if (currentView === "signin" || currentView === "signup") {
+        setError("");
+      }
+
+      authDraftRef.current = {
+        ...authDraftRef.current,
+        [event.target.name]: event.target.value,
+      };
+      return;
+    }
+
     if (event.target.id === "search-input") {
       headerSearchDraftRef.current = event.target.value;
       return;
@@ -2219,7 +2630,9 @@ function App() {
         onBlurCapture={handleHomepageBlur}
         dangerouslySetInnerHTML={{
           __html:
-            currentView === "detail"
+            currentView === "signin" || currentView === "signup"
+              ? authPageMarkup
+              : currentView === "detail"
               ? productDetailMarkup
               : currentView === "results"
                 ? searchResultsMarkup
