@@ -37,7 +37,7 @@ https://github.com/user-attachments/assets/51e1987c-196b-421b-bad2-2bb6596831de
 
 ## 🧠 Tech Stack
 
-**Frontend:** React (Vite), Axios, Responsive CSS  
+**Frontend:** React (Vite), Responsive CSS  
 **Backend & DB:** Node.js, Express.js, PostgreSQL (Supabase) | **Deploy:** Vercel + Render  
 
 ---
