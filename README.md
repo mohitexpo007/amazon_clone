@@ -103,7 +103,7 @@ class Cart {
 # Project Setup
 
 ## 1️⃣ Clone the Repository
-git clone https://github.com/your-username/amazonclone.git
+git clone https://github.com/mohitexpo007/amazon_clone.git
 
 cd amazonclone
 
