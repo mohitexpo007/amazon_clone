@@ -20,6 +20,8 @@ This project demonstrates **real-world backend architecture**, **dynamic product
 - 🔗 **Frontend:** https://amazon-clone-frontend-eta-nine.vercel.app/
 - ⚙️ **Backend API:** https://amazon-clone-backend-3z98.onrender.com  
 
+### Note: For now search for electronics,phones,clothing as 2 datasets of fashion and electronics has been integrated with 20k entries.
+
 ---
 
 ## 🎥 Demo
@@ -97,5 +99,33 @@ class Cart {
 
 <img width="1300" height="1169" alt="image" src="https://github.com/user-attachments/assets/eaf54859-e9fc-4cec-a8bb-c7b4b170355d" />
 
-## Author Mohit
 
+# Project Setup
+
+## 1️⃣ Clone the Repository
+git clone https://github.com/your-username/amazonclone.git
+
+cd amazonclone
+
+## 2️⃣ Setup Frontend
+```
+cd frontend
+npm install
+npm run dev
+```
+
+### 👉 Frontend will run on:
+### http://localhost:5173
+
+## 3️⃣ Setup Backend
+
+Open a new terminal and run:
+
+```
+cd backend
+npm install
+npm start
+```
+
+### 👉 Backend will run on:
+### http://localhost:5000
